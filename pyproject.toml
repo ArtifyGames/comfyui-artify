@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-artify"
+description = "ComfyUI Artify custom nodes. Includes a robust image resize node with single-pass scale_by behavior and configurable divisible rounding."
+version = "0.1.0"
+license = { file = "LICENSE" }
+
+[project.urls]
+Repository = "https://github.com/<your-username>/comfyui-artify"
+# Used by Comfy Registry: https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "<your-publisher-id>"
+DisplayName = "ComfyUI-Artify"
+Icon = ""
