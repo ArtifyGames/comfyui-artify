@@ -7,6 +7,12 @@ ComfyUI Artify is a lightweight custom node pack focused on image utilities.
 - `Image Resize (Artify)`
   - Node id: `ArtifyImageResize`
   - Category: `Artify/Image`
+- `Inpaint Crop (Artify)`
+  - Node id: `ArtifyInpaintCrop`
+  - Category: `Artify/Inpaint`
+- `Inpaint Stitch (Artify)`
+  - Node id: `ArtifyInpaintStitch`
+  - Category: `Artify/Inpaint`
 
 ## Why this node exists
 
@@ -45,6 +51,22 @@ Outputs:
 - `MASK` (if no input mask is provided, a zero mask is returned)
 - `WIDTH`
 - `HEIGHT`
+
+## Inpaint Crop/Stitch behavior
+
+`Inpaint Crop (Artify)` and `Inpaint Stitch (Artify)` are based on the same
+crop-and-stitch concept, with a simplified crop pipeline:
+
+- no pre-resize stage
+- no outpainting/extend stage in the crop node
+- no forced output target resize controls
+- minimum context area control:
+  - `min_context_megapixels`
+
+The crop node computes context from mask/context-mask and then enforces this
+minimum context area while preserving the current context aspect ratio and
+staying inside image bounds. If the image is too small to reach the target
+megapixels, it uses the largest possible context that fits.
 
 ## Install
 

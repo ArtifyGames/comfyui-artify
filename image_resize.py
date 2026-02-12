@@ -14,25 +14,42 @@ class ArtifyImageResize:
 
     @classmethod
     def INPUT_TYPES(cls):
+        tooltips = {
+            "image": "Input image batch (BHWC).",
+            "custom_width": "Target width. If only one side is set, the other preserves aspect ratio.",
+            "custom_height": "Target height. If only one side is set, the other preserves aspect ratio.",
+            "megapixels": "If > 0, computes size from megapixels and aspect ratio (highest priority).",
+            "scale_by": "Scale factor applied exactly once (ignored when megapixels > 0).",
+            "resize_mode": "How resize_value is interpreted: longest_side or shortest_side.",
+            "resize_value": "Target side value used with resize_mode.",
+            "upscale_method": "Interpolation/upscale kernel.",
+            "device": "CPU is safest; GPU can be faster (Lanczos requires CPU).",
+            "divisible_by": "Snap final width/height to a multiple of this value.",
+            "divisible_mode": "Rounding mode for divisible snapping.",
+            "output_mode": "Final fit behavior: stretch, crop, or padding variants.",
+            "crop_position": "Anchor for crop and asymmetric padding placement.",
+            "pad_color": "Padding color for pad mode (#RRGGBB or #RGB).",
+            "mask": "Optional mask resized with the same geometry as image.",
+        }
         return {
             "required": {
-                "image": ("IMAGE",),
-                "custom_width": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1}),
-                "custom_height": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1}),
-                "megapixels": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 16.0, "step": 0.01}),
-                "scale_by": ("FLOAT", {"default": 1.0, "min": 0.01, "max": 8.0, "step": 0.01}),
-                "resize_mode": (["longest_side", "shortest_side"], {"default": "longest_side"}),
-                "resize_value": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1}),
-                "upscale_method": (cls.upscale_methods, {"default": "lanczos"}),
-                "device": (["cpu", "gpu"], {"default": "cpu"}),
-                "divisible_by": ("INT", {"default": 2, "min": 1, "max": 512, "step": 1}),
-                "divisible_mode": (["floor", "ceil", "nearest"], {"default": "floor"}),
-                "output_mode": (["stretch", "pad", "pad_edge", "pad_edge_pixel", "crop", "pillarbox_blur"], {"default": "stretch"}),
-                "crop_position": (["center", "top", "bottom", "left", "right"], {"default": "center"}),
-                "pad_color": ("STRING", {"default": "#FFFFFF"}),
+                "image": ("IMAGE", {"tooltip": tooltips["image"]}),
+                "custom_width": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1, "tooltip": tooltips["custom_width"]}),
+                "custom_height": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1, "tooltip": tooltips["custom_height"]}),
+                "megapixels": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 16.0, "step": 0.01, "tooltip": tooltips["megapixels"]}),
+                "scale_by": ("FLOAT", {"default": 1.0, "min": 0.01, "max": 8.0, "step": 0.01, "tooltip": tooltips["scale_by"]}),
+                "resize_mode": (["longest_side", "shortest_side"], {"default": "longest_side", "tooltip": tooltips["resize_mode"]}),
+                "resize_value": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 1, "tooltip": tooltips["resize_value"]}),
+                "upscale_method": (cls.upscale_methods, {"default": "lanczos", "tooltip": tooltips["upscale_method"]}),
+                "device": (["cpu", "gpu"], {"default": "cpu", "tooltip": tooltips["device"]}),
+                "divisible_by": ("INT", {"default": 2, "min": 1, "max": 512, "step": 1, "tooltip": tooltips["divisible_by"]}),
+                "divisible_mode": (["floor", "ceil", "nearest"], {"default": "floor", "tooltip": tooltips["divisible_mode"]}),
+                "output_mode": (["stretch", "pad", "pad_edge", "pad_edge_pixel", "crop", "pillarbox_blur"], {"default": "stretch", "tooltip": tooltips["output_mode"]}),
+                "crop_position": (["center", "top", "bottom", "left", "right"], {"default": "center", "tooltip": tooltips["crop_position"]}),
+                "pad_color": ("STRING", {"default": "#FFFFFF", "tooltip": tooltips["pad_color"]}),
             },
             "optional": {
-                "mask": ("MASK",),
+                "mask": ("MASK", {"tooltip": tooltips["mask"]}),
             },
         }
 
