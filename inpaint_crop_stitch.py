@@ -7,6 +7,8 @@ import torch
 import torch.nn.functional as TF
 import torchvision.transforms.functional as VF
 
+DEFAULT_ALIGNMENT_GRID = 8
+
 
 class InpaintOps:
     def rescale_i(self, samples, width, height, algorithm):
@@ -307,7 +309,24 @@ class InpaintOps:
         mask = mask.clone()
 
         _, h, w, _ = inpainted_image.shape
-        if ctc_w > w or ctc_h > h:
+        if ctc_w == w and ctc_h == h:
+            resized_image = inpainted_image
+            resized_mask = mask
+        elif (w <= ctc_w and h <= ctc_h and (ctc_w - w) < DEFAULT_ALIGNMENT_GRID and (ctc_h - h) < DEFAULT_ALIGNMENT_GRID):
+            # Common latent rounding case: model output is slightly smaller.
+            # Preserve top-left anchoring to avoid interpolation-induced drift.
+            resized_image = torch.zeros(
+                (inpainted_image.shape[0], ctc_h, ctc_w, inpainted_image.shape[3]),
+                dtype=inpainted_image.dtype,
+                device=inpainted_image.device,
+            )
+            resized_image[:, :h, :w, :] = inpainted_image
+            if ctc_w > w:
+                resized_image[:, :h, w:, :] = inpainted_image[:, :h, w - 1:w, :].repeat(1, 1, ctc_w - w, 1)
+            if ctc_h > h:
+                resized_image[:, h:, :, :] = resized_image[:, h - 1:h, :, :].repeat(1, ctc_h - h, 1, 1)
+            resized_mask = mask
+        elif ctc_w > w or ctc_h > h:
             resized_image = self.rescale_i(inpainted_image, ctc_w, ctc_h, upscale_algorithm)
             resized_mask = self.rescale_m(mask, ctc_w, ctc_h, upscale_algorithm)
         else:
@@ -322,6 +341,8 @@ class InpaintOps:
 
 
 class ArtifyInpaintCrop:
+    INTERNAL_ALIGNMENT_GRID = DEFAULT_ALIGNMENT_GRID
+
     @classmethod
     def INPUT_TYPES(cls):
         tooltips = {
@@ -334,7 +355,7 @@ class ArtifyInpaintCrop:
             "mask_blend_pixels": "Blend radius (in pixels) used for stitching transitions.",
             "mask_hipass_filter": "Ignore mask values below this threshold.",
             "context_from_mask_extend_factor": "Grow mask-derived context area by this factor.",
-            "min_context_megapixels": "Minimum context area in megapixels. Grows context while preserving aspect ratio.",
+            "min_context_megapixels": "Minimum context area in megapixels. Grows context while preserving input image aspect ratio.",
             "device_mode": "Run crop math on CPU (safe) or GPU (faster).",
             "mask": "Primary inpainting mask.",
             "optional_context_mask": "Extra mask area to force-include as context.",
@@ -368,31 +389,84 @@ class ArtifyInpaintCrop:
         if min_megapixels <= 0.0 or w <= 0 or h <= 0:
             return x, y, w, h
 
+        image_area = float(image_w * image_h)
+        image_aspect = float(image_w) / float(image_h)
+        min_area = float(min_megapixels) * 1024.0 * 1024.0
+        if min_area >= image_area:
+            target_w, target_h = image_w, image_h
+        else:
+            # Keep a consistent aspect ratio (input image ratio), while:
+            # 1) containing the current context, and
+            # 2) reaching at least min_area if possible.
+            req_h_from_context = max(float(h), float(w) / image_aspect)
+            req_h_from_area = math.sqrt(min_area / image_aspect)
+            target_h = max(req_h_from_context, req_h_from_area)
+            target_w = target_h * image_aspect
+
+            if target_w > image_w or target_h > image_h:
+                fit_scale = min(float(image_w) / target_w, float(image_h) / target_h)
+                target_w *= fit_scale
+                target_h *= fit_scale
+
+            target_w = min(image_w, max(w, int(math.ceil(target_w))))
+            target_h = min(image_h, max(h, int(math.ceil(target_h))))
+
+            # Rounding can slightly under-run constraints. Nudge by one pixel when possible.
+            while (target_w * target_h) < min_area and (target_w < image_w or target_h < image_h):
+                grew = False
+                if target_w < image_w:
+                    target_w += 1
+                    grew = True
+                if (target_w * target_h) < min_area and target_h < image_h:
+                    target_h += 1
+                    grew = True
+                if not grew:
+                    break
+
+            target_w = int(target_w)
+            target_h = int(target_h)
+
         current_area = float(w * h)
-        target_area = float(min_megapixels) * 1024.0 * 1024.0
-        if current_area >= target_area:
+        if current_area >= min_area:
             return x, y, w, h
 
-        scale_needed = math.sqrt(target_area / current_area)
-        scale_max = min(float(image_w) / float(w), float(image_h) / float(h))
-        scale = min(scale_needed, scale_max)
-        if scale <= 1.0:
-            return x, y, w, h
-
-        target_w = min(image_w, max(1, int(round(w * scale))))
-        target_h = min(image_h, max(1, int(round(h * scale))))
-
-        center_x = x + (w / 2.0)
-        center_y = y + (h / 2.0)
-
-        new_x = int(round(center_x - target_w / 2.0))
-        new_y = int(round(center_y - target_h / 2.0))
+        # Match original crop behavior to avoid 1px drift:
+        # grow around current context using integer floor division.
+        new_x = x - ((target_w - w) // 2)
+        new_y = y - ((target_h - h) // 2)
 
         max_x = max(0, image_w - target_w)
         max_y = max(0, image_h - target_h)
         new_x = min(max(new_x, 0), max_x)
         new_y = min(max(new_y, 0), max_y)
         return new_x, new_y, int(target_w), int(target_h)
+
+    def _snap_context_to_grid(self, x, y, w, h, image_w, image_h):
+        grid = self.INTERNAL_ALIGNMENT_GRID
+        if grid <= 1:
+            return x, y, w, h
+
+        if (w % grid == 0) and (h % grid == 0):
+            return x, y, w, h
+
+        target_w = int(math.ceil(w / grid) * grid)
+        target_h = int(math.ceil(h / grid) * grid)
+
+        if target_w > image_w:
+            target_w = image_w
+        if target_h > image_h:
+            target_h = image_h
+
+        if target_w < w or target_h < h:
+            return x, y, w, h
+
+        new_x = x - ((target_w - w) // 2)
+        new_y = y - ((target_h - h) // 2)
+        max_x = max(0, image_w - target_w)
+        max_y = max(0, image_h - target_h)
+        new_x = min(max(new_x, 0), max_x)
+        new_y = min(max(new_y, 0), max_y)
+        return new_x, new_y, target_w, target_h
 
     def inpaint_crop(
         self,
@@ -515,6 +589,14 @@ class ArtifyInpaintCrop:
                 cur_w,
                 cur_h,
                 min_context_megapixels,
+                sub_image.shape[2],
+                sub_image.shape[1],
+            )
+            cur_x, cur_y, cur_w, cur_h = self._snap_context_to_grid(
+                cur_x,
+                cur_y,
+                cur_w,
+                cur_h,
                 sub_image.shape[2],
                 sub_image.shape[1],
             )

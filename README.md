@@ -64,9 +64,12 @@ crop-and-stitch concept, with a simplified crop pipeline:
   - `min_context_megapixels`
 
 The crop node computes context from mask/context-mask and then enforces this
-minimum context area while preserving the current context aspect ratio and
-staying inside image bounds. If the image is too small to reach the target
-megapixels, it uses the largest possible context that fits.
+minimum context area while preserving the input image aspect ratio and staying
+inside image bounds. If the image is too small to reach the target megapixels,
+it uses the largest possible context that fits.
+
+To reduce stitch drift with diffusion/latent pipelines, crop dimensions are
+internally aligned to a model-friendly grid.
 
 ## Install
 
