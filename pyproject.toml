@@ -5,10 +5,10 @@ version = "0.1.0"
 license = { file = "LICENSE" }
 
 [project.urls]
-Repository = "https://github.com/<your-username>/comfyui-artify"
+Repository = "https://github.com/ArtifyGames/comfyui-artify"
 # Used by Comfy Registry: https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = "<your-publisher-id>"
+PublisherId = "artifygames"
 DisplayName = "ComfyUI-Artify"
 Icon = ""

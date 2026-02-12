@@ -52,7 +52,7 @@ Outputs:
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/<your-username>/comfyui-artify.git
+git clone https://github.com/ArtifyGames/comfyui-artify.git
 ```
 
 If you add optional dependencies later:
